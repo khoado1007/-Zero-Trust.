@@ -1,0 +1,80 @@
+// --- CẤU HÌNH KẾT NỐI ---
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// --- BẢNG 1: NHÂN VIÊN ---
+model User {
+  id          String   @id @default(uuid())
+  employeeId  String   @unique // VD: NV001
+  fullName    String
+  email       String   @unique
+  department  String
+  role        Role     @default(EMPLOYEE)
+  
+  devices     Device[] // Quan hệ 1-Nhiều: 1 User có nhiều Device
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+// --- BẢNG 2: THIẾT BỊ (AGENT) ---
+model Device {
+  id              String       @id @default(uuid())
+  originalName String
+  customName   String?
+  warningCount Int     @default(0)
+  deviceId        String       @unique // Quan trọng: MAC Address hoặc UUID từ Agent gửi lên
+  deviceName      String?      // VD: ThinkPad T14
+  
+  isRemoteAllowed Boolean      @default(false) // Cờ Zero Trust: Cho phép dùng ở IP lạ không?
+  status          DeviceStatus @default(SAFE)
+  department      String?      @default("SALES")
+  
+  accessRequestReason  String?
+  requestStatus        String?  // PENDING/APPROVED/DENIED
+  jitHours             Int?
+  requestIp            String?
+  requestTimestamp     DateTime?
+  
+  lastKnownIp     String?
+
+  lastSeen        DateTime     @default(now())
+  
+  // Khóa ngoại liên kết tới bảng User
+  userId          String?
+  user            User?        @relation(fields: [userId], references: [id])
+  
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+}
+
+// --- BẢNG 3: DANH SÁCH IP HỢP LỆ ---
+model NetworkRule {
+  id           String   @id @default(uuid())
+  locationName String   // VD: Trụ sở chính, Quán Cafe Startbucks (nếu cho phép)
+  allowedIp    String   @unique // IP Public
+  isActive     Boolean  @default(true)
+  
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+
+
+// --- KIỂU DỮ LIỆU ĐỊNH SẴN (ENUM) ---
+enum Role {
+  ADMIN
+  EMPLOYEE
+}
+
+enum DeviceStatus {
+  SAFE
+  LOCKED
+  STOLEN
+}

@@ -1,0 +1,20 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto+Mono:wght@400;500&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: theme('colors.main-bg');
+    color: theme('colors.slate.200');
+    font-family: theme('fontFamily.sans');
+  }
+}
+
+@layer utilities {
+  .glassmorphism {
+    background: rgba(30, 41, 59, 0.6);
+    backdrop-filter: blur(theme('backdropBlur.xs'));
+    border: 1px solid theme('colors.border');
+  }
+}
