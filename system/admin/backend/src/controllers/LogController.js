@@ -2,8 +2,8 @@ const express = require('express');
 const SecurityLog = require('../models/nosql/SecurityLog');
 
 class LogController {
-  constructor(config) {
-    this.config = config;
+  constructor(container) {
+    this.SecurityLog = require('../models/nosql/SecurityLog');
     this.router = express.Router();
     this._setupRoutes();
   }

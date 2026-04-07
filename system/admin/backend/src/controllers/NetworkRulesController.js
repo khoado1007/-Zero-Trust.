@@ -1,9 +1,8 @@
 const express = require('express');
 
-class NetworkController {
-  constructor(config) {
-    this.config = config;
-    this.prisma = config.getPrisma();
+class NetworkRulesController {
+  constructor(container) {
+    this.prisma = container.getPrisma();
     this.router = express.Router();
     this._setupRoutes();
   }
@@ -76,4 +75,4 @@ class NetworkController {
   }
 }
 
-module.exports = NetworkController;
+module.exports = NetworkRulesController;

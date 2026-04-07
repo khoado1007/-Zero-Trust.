@@ -7,6 +7,7 @@ import DeviceList from './components/DeviceList';
 import LogHistory from './components/LogHistory';
 import NetworkRules from './components/NetworkRules';
 
+
 function App() {
   const [isConnected, setIsConnected] = useState(false);
   const [currentMenu, setCurrentMenu] = useState('dashboard'); // Điều hướng menu
@@ -44,9 +45,10 @@ function App() {
             <NetworkRules />
           )}
           
-          {currentMenu === 'logs' && (
+{currentMenu === 'logs' && (
              <LogHistory />
           )}
+
         </main>
       </div>
     </div>

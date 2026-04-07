@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ShieldAlert, Lock, Laptop, User, Clock, Trash2 } from 'lucide-react';
+import { ShieldAlert, Lock, Laptop, User, Clock, Trash2, UserPlus } from 'lucide-react';
 import { io } from 'socket.io-client';
 
 const DeviceList = () => {
@@ -7,31 +7,33 @@ const DeviceList = () => {
     const [loading, setLoading] = useState(true);
     const [errorMsg, setErrorMsg] = useState(null);
 
-    // Lấy danh sách thiết bị từ Backend (PostgreSQL) an toàn hơn
+    const [showAssignModal, setShowAssignModal] = useState(false);
+    const [selectedDevice, setSelectedDevice] = useState(null);
+    const [formData, setFormData] = useState({ fullName: '', employeeId: '', department: 'SALES' });
+    const [assignLoading, setAssignLoading] = useState(false);
+
     const fetchDevices = async () => {
         try {
             const response = await fetch('http://localhost:3000/api/v1/devices');
-            
-            // Nếu Backend báo lỗi (VD: 500, 404)
             if (!response.ok) {
                 throw new Error(`Lỗi Server: ${response.status}`);
             }
-
             const data = await response.json();
-            
-            // Khóa an toàn: Đảm bảo dữ liệu chắc chắn là Mảng thì mới cho phép render
+            console.log('[DEBUG DeviceList fetchDevices] Raw data:', data);
             if (Array.isArray(data)) {
+                console.log('[DEBUG DeviceList] JIT fields sample:', data.slice(0,2).map(d => ({deviceId: d.deviceId, status:d.status, requestStatus:d.requestStatus, jitHours:d.jitHours, requestTimestamp:d.requestTimestamp})));
                 setDevices(data);
             } else {
                 setDevices([]);
                 setErrorMsg("Dữ liệu trả về không đúng định dạng.");
             }
+
         } catch (error) {
             console.error("Lỗi khi tải danh sách thiết bị:", error);
             setErrorMsg("Không thể kết nối đến Backend Node.js. Hãy kiểm tra xem Server đã bật chưa!");
-            setDevices([]); // Ép về mảng rỗng để không bị crash
+            setDevices([]);
         } finally {
-            setLoading(false); // Luôn luôn tắt loading dù thành công hay thất bại
+            setLoading(false);
         }
     };
 
@@ -39,36 +41,25 @@ const DeviceList = () => {
         fetchDevices();
     }, []);
 
-    // --- LẮNG NGHE SOCKET.IO REAL-TIME ---
     useEffect(() => {
         const socket = io('http://localhost:3000');
-
         socket.on('device_updated', (updatedDevice) => {
             setDevices(prev => prev?.map(dev => dev.id === updatedDevice.id ? { ...dev, ...updatedDevice } : dev));
         });
-
         socket.on('device_deleted', (payload) => {
             setDevices(prev => prev?.filter(dev => dev.id !== payload.id));
         });
-
-        return () => {
-            socket.disconnect();
-        };
+        return () => socket.disconnect();
     }, []);
 
-    // --- LỆNH KHÓA: Cập nhật State trực tiếp ---
     const handleLockDevice = async (id, deviceName) => {
-        if (!window.confirm(`⚠️ Bạn có chắc chắn muốn KHÓA KHẨN CẤP thiết bị [${deviceName}] không?\nLệnh này sẽ có hiệu lực ngay lập tức!`)) return;
-
+        if (!window.confirm(`⚠️ Bạn có chắc chắn muốn KHÓA KHẨN CẤP thiết bị [${deviceName}] không?`)) return;
         try {
             const response = await fetch(`http://localhost:3000/api/v1/devices/${id}/lock`, { method: 'PUT' });
             if (response.ok) {
-                // ⚡ Phép thuật ở đây: Sửa thẳng vào biến 'devices' đang hiển thị trên màn hình
-                setDevices(prevDevices => 
-                    prevDevices.map(device => 
-                        device.id === id ? { ...device, status: 'LOCKED' } : device
-                    )
-                );
+                setDevices(prevDevices => prevDevices.map(device => 
+                    device.id === id ? { ...device, status: 'LOCKED' } : device
+                ));
                 alert(`✅ Đã phát lệnh phong tỏa đến máy ${deviceName}`);
             }
         } catch (error) {
@@ -76,19 +67,14 @@ const DeviceList = () => {
         }
     };
 
-    // --- LỆNH MỞ KHÓA: Cập nhật State trực tiếp ---
     const handleUnlockDevice = async (id, deviceName) => {
         if (!window.confirm(`🛡️ Xác nhận gỡ phong tỏa cho thiết bị [${deviceName}]?`)) return;
-
         try {
             const response = await fetch(`http://localhost:3000/api/v1/devices/${id}/unlock`, { method: 'PUT' });
             if (response.ok) {
-                // ⚡ Phép thuật ở đây: Trả trạng thái về SAFE ngay lập tức
-                setDevices(prevDevices => 
-                    prevDevices.map(device => 
-                        device.id === id ? { ...device, status: 'SAFE' } : device
-                    )
-                );
+                setDevices(prevDevices => prevDevices.map(device => 
+                    device.id === id ? { ...device, status: 'SAFE' } : device
+                ));
                 alert(`✅ Đã khôi phục truy cập cho máy ${deviceName}`);
             }
         } catch (error) {
@@ -96,28 +82,23 @@ const DeviceList = () => {
         }
     };
 
-    // --- LỆNH XÓA THIẾT BỊ ---
     const handleDeleteDevice = async (id, deviceName) => {
-        if (!window.confirm(`🚨 CẢNH BÁO: Bạn có chắc chắn muốn XÓA thiết bị [${deviceName}] khỏi hệ thống không?\nHành động này không thể hoàn tác!`)) return;
-
+        if (!window.confirm(`🚨 CẢNH BÁO: Bạn có chắc chắn muốn XÓA thiết bị [${deviceName}] khỏi hệ thống không?`)) return;
         try {
             const response = await fetch(`http://localhost:3000/api/v1/devices/${id}`, { method: 'DELETE' });
             if (response.ok) {
-                // Cập nhật State cục bộ an toàn: Lọc bỏ thiết bị vừa xóa
                 setDevices(prevDevices => prevDevices.filter(device => device.id !== id));
                 alert(`✅ Đã xóa thiết bị ${deviceName} khỏi hệ thống.`);
             } else {
-                alert(`❌ Lỗi khi xóa thiết bị. Vui lòng kiểm tra lại Backend.`);
+                alert(`❌ Lỗi khi xóa thiết bị.`);
             }
         } catch (error) {
             console.error("Lỗi khi xóa thiết bị:", error);
         }
     };
 
-    // --- TOGGLE REMOTE ACCESS (VIP) ---
     const toggleRemoteAccess = async (id, deviceName) => {
         if (!window.confirm("Bạn có chắc chắn muốn thay đổi quyền Remote của thiết bị này?")) return;
-
         try {
             const newStatus = !devices.find(d => d.id === id)?.isRemoteAllowed;
             const response = await fetch(`http://localhost:3000/api/v1/devices/${id}/toggle-remote`, {
@@ -125,15 +106,10 @@ const DeviceList = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ isRemoteAllowed: newStatus })
             });
-
             if (response.ok) {
-                // Optimistic UI update
-                setDevices(prevDevices => 
-                    prevDevices.map(device => 
-                        device.id === id ? { ...device, isRemoteAllowed: newStatus } : device
-                    )
-                );
-                // Refetch to sync with DB
+                setDevices(prevDevices => prevDevices.map(device => 
+                    device.id === id ? { ...device, isRemoteAllowed: newStatus } : device
+                ));
                 fetchDevices();
             } else {
                 alert('Lỗi khi cập nhật quyền Remote');
@@ -144,38 +120,30 @@ const DeviceList = () => {
         }
     };
 
-    // --- LỆNH DUYỆT JIT (JUST-IN-TIME ACCESS) ---
-    const handleApproveJIT = async (id, deviceName) => {
+const handleApproveJIT = async (deviceId, deviceName) => {
         const hours = window.prompt(`⏳ Nhập số giờ cấp phép (JIT) cho [${deviceName}]:`, "2");
         if (!hours) return;
-        
         const reason = window.prompt(`📝 Nhập lý do cấp phép cho [${deviceName}]:`, "Làm việc remote tạm thời");
         if (!reason) return;
-
         try {
-            const response = await fetch(`http://localhost:3000/api/v1/devices/${id}/approve-jit`, { 
-                method: 'PUT',
+            const response = await fetch(`http://localhost:3000/api/v1/devices/approve-jit`, { 
+                method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ jitHours: parseInt(hours, 10), reason })
+                body: JSON.stringify({ deviceId: deviceId, jitHours: parseInt(hours, 10), reason })
             });
-            
             if (response.ok) {
-                // Cập nhật State cục bộ an toàn, Socket.IO cũng sẽ emit để backup
-                setDevices(prevDevices => 
-                    (prevDevices || []).map(device => 
-                        device.id === id ? { ...device, status: 'SAFE', jitHours: parseInt(hours, 10) } : device
-                    )
-                );
+                // Socket will update UI immediately with full data incl. requestTimestamp
                 alert(`✅ Đã cấp quyền JIT ${hours}h cho máy ${deviceName}`);
             } else {
-                alert(`❌ Lỗi khi cấp quyền JIT từ Backend. Hãy kiểm tra lại Controller.`);
+
+                const errData = await response.json().catch(() => ({}));
+                alert(`❌ ${errData.error || 'Lỗi khi cấp quyền JIT từ Backend'}`);
             }
         } catch (error) {
             console.error("Lỗi khi duyệt JIT:", error);
         }
     };
 
-    // --- SET DEPARTMENT ---
     const handleSetDepartment = async (id, newDept) => {
         try {
             const response = await fetch(`http://localhost:3000/api/v1/devices/${id}/set-department`, {
@@ -184,11 +152,9 @@ const DeviceList = () => {
                 body: JSON.stringify({ department: newDept })
             });
             if (response.ok) {
-                setDevices(prevDevices => 
-                    prevDevices.map(device => 
-                        device.id === id ? { ...device, department: newDept } : device
-                    )
-                );
+                setDevices(prevDevices => prevDevices.map(device => 
+                    device.id === id ? { ...device, department: newDept } : device
+                ));
                 alert(`Đã cập nhật phòng ban: ${newDept}`);
             } else {
                 alert('Lỗi cập nhật phòng ban');
@@ -199,9 +165,54 @@ const DeviceList = () => {
         }
     };
 
+    const openAssignModal = (device) => {
+        if (device.user) {
+            alert('Thiết bị đã có nhân sự được gán!');
+            return;
+        }
+        setSelectedDevice(device);
+        setFormData({ fullName: '', employeeId: '', department: device.department || 'SALES' });
+        setShowAssignModal(true);
+    };
+
+    const handleFormChange = (e) => {
+        setFormData({ ...formData, [e.target.name]: e.target.value });
+    };
+
+    const handleAssignUser = async (e) => {
+        e.preventDefault();
+        if (!formData.fullName.trim() || !formData.employeeId.trim()) {
+            alert('Vui lòng nhập Họ và Tên và Mã nhân viên!');
+            return;
+        }
+
+        setAssignLoading(true);
+        try {
+            const response = await fetch(`http://localhost:3000/api/v1/devices/${selectedDevice.id}/assign-user`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData),
+            });
+
+            if (response.ok) {
+                const result = await response.json();
+                setDevices(prev => prev.map(d => d.id === selectedDevice.id ? result.device : d));
+                setShowAssignModal(false);
+                alert('✅ Đã gán nhân sự thành công!');
+            } else {
+                const err = await response.json();
+                alert(`❌ Lỗi: ${err.error || 'Không thể gán nhân sự'}`);
+            }
+        } catch (error) {
+            console.error('Assign error:', error);
+            alert('Lỗi kết nối server');
+        } finally {
+            setAssignLoading(false);
+        }
+    };
+
     if (loading) return <div className="text-cyan-400 animate-pulse text-center mt-10">Đang đồng bộ dữ liệu với PostgreSQL...</div>;
 
-    // Nếu có lỗi, hiển thị thông báo lỗi thay vì crash banh màn hình
     if (errorMsg) return <div className="text-red-500 font-bold text-center mt-10 border border-red-500 p-4 rounded bg-red-900/20">{errorMsg}</div>;
 
     return (
@@ -224,7 +235,6 @@ const DeviceList = () => {
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-800/50 text-slate-300 bg-slate-900">
-                        {/* Render an toàn: Kiểm tra nếu mảng rỗng thì báo Không có dữ liệu */}
                         {devices.length === 0 ? (
                             <tr><td colSpan="6" className="p-8 text-center text-slate-500 italic">Chưa có thiết bị nào trong hệ thống.</td></tr>
                         ) : (
@@ -236,8 +246,21 @@ const DeviceList = () => {
                                                 <User className="w-4 h-4 text-cyan-400" />
                                             </div>
                                             <div>
-                                                <div className="font-semibold text-slate-200">{device.user?.fullName || 'Chưa định danh'}</div>
-                                                <div className="text-xs text-slate-500 font-mono mt-0.5">{device.user?.role || 'UNKNOWN'}</div>
+                                                {device.user ? (
+                                                    <>
+                                                        <div className="font-semibold text-slate-200">{device.user.fullName} ({device.user.employeeId})</div>
+                                                        <div className="text-xs text-slate-500 font-mono mt-0.5">{device.user.role || 'UNKNOWN'}</div>
+                                                    </>
+                                                ) : (
+                                                    <button
+                                                        onClick={() => openAssignModal(device)}
+                                                        className="flex items-center gap-1 text-blue-400 hover:text-blue-300 font-semibold transition-colors"
+                                                        title="Gán nhân sự (Click để mở popup)"
+                                                    >
+                                                        <UserPlus className="w-4 h-4" />
+                                                        Chưa định danh
+                                                    </button>
+                                                )}
                                             </div>
                                         </div>
                                     </td>
@@ -271,21 +294,44 @@ const DeviceList = () => {
                                         </button>
                                     </td>
                                     <td className="p-4">
-                                        <span className={`flex items-center gap-1 w-fit px-2 py-1 rounded text-xs font-bold ${
+                                        {device.status === 'SAFE' && device.requestStatus === 'APPROVED' && device.jitHours && device.requestTimestamp ? (
+                                          (() => {
+                                            const exp = new Date(device.requestTimestamp).getTime() + (device.jitHours * 60 * 60 * 1000);
+                                            const diff = Math.max(0, exp - Date.now());
+                                            const h = Math.floor(diff / 3600000);
+                                            const m = Math.floor((diff % 3600000) / 60000);
+                                            const remaining = diff > 0 ? `${h}h ${m}m` : 'EXPIRED';
+                                            console.log(`[JIT UI] ${device.deviceId}: remaining ${remaining}`);
+                                            return (
+                                              <div className="space-y-1">
+                                                <span className="flex items-center gap-1 w-fit px-2 py-1 rounded text-xs font-bold bg-amber-900/30 text-amber-400 border border-amber-800/50">
+                                                  <Clock className="w-3 h-3" />
+                                                  JIT Active
+                                                </span>
+                                                <span className="text-xs font-mono bg-amber-900/50 text-amber-300 px-2 py-0.5 rounded-full">
+                                                  {remaining}
+                                                </span>
+                                              </div>
+                                            );
+                                          })()
+                                        ) : (
+                                          <span className={`flex items-center gap-1 w-fit px-2 py-1 rounded text-xs font-bold ${
                                             device.status === 'SAFE' 
                                             ? 'bg-emerald-900/30 text-emerald-400 border border-emerald-800/50' 
                                             : 'bg-red-900/40 text-red-400 border border-red-800/50'
-                                        }`}>
+                                          }`}>
                                             {device.status === 'SAFE' ? <ShieldAlert className="w-3 h-3" /> : <Lock className="w-3 h-3" />}
                                             {device.status}
-                                        </span>
+                                          </span>
+                                        )}
                                     </td>
+
                                     <td className="p-4 text-right">
                                         <div className="flex items-center justify-end gap-2">
                                             {device.status === 'LOCKED' ? (
                                                 <>
                                                     <button 
-                                                        onClick={() => handleApproveJIT(device.id, device.deviceName)}
+onClick={() => handleApproveJIT(device.deviceId, device.deviceName)}
                                                         className="flex items-center justify-center gap-2 px-4 py-2 rounded-lg font-semibold text-sm transition-all bg-blue-600/20 text-blue-400 border border-blue-600/50 hover:bg-blue-600 hover:text-white hover:shadow-[0_0_15px_rgba(59,130,246,0.5)]"
                                                     >
                                                         <Clock className="w-4 h-4" />
@@ -323,6 +369,72 @@ const DeviceList = () => {
                     </tbody>
                 </table>
             </div>
+
+            {showAssignModal && selectedDevice && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-xl p-8 max-w-md w-full max-h-[90vh] overflow-y-auto">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-xl font-bold text-slate-200 flex items-center gap-2">
+                                <UserPlus className="w-6 h-6 text-blue-400" />
+                                Gán nhân sự cho {selectedDevice.deviceId}
+                            </h3>
+                            <button onClick={() => setShowAssignModal(false)} className="text-slate-400 hover:text-slate-200 transition-colors">
+                                ×
+                            </button>
+                        </div>
+                        <form onSubmit={handleAssignUser} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Họ và Tên</label>
+                                <input
+                                    name="fullName"
+                                    value={formData.fullName}
+                                    onChange={handleFormChange}
+                                    className="w-full p-3 bg-slate-800 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    placeholder="Nguyễn Văn A"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Mã nhân viên</label>
+                                <input
+                                    name="employeeId"
+                                    value={formData.employeeId}
+                                    onChange={handleFormChange}
+                                    className="w-full p-3 bg-slate-800 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono"
+                                    placeholder="NV001"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Phòng ban</label>
+                                <select
+                                    name="department"
+                                    value={formData.department}
+                                    onChange={handleFormChange}
+                                    className="w-full p-3 bg-slate-800 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                >
+                                    <option value="SALES">SALES (Nghiêm ngặt)</option>
+                                    <option value="SOCIAL">SOCIAL (Linh hoạt)</option>
+                                </select>
+                            </div>
+                            <button
+                                type="submit"
+                                disabled={assignLoading}
+                                className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-6 rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                            >
+                                {assignLoading ? (
+                                    <>
+                                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                                        Đang gán...
+                                    </>
+                                ) : (
+                                    'Gán nhân sự'
+                                )}
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

@@ -1,10 +1,11 @@
+# Ghost Data Bug Fix - Device Unlock JIT Wipe
 
-- [ ] 2. Add imports: getpass, subprocess, ttk
-- [ ] 3. Add helper funcs: hide_desktop_icons(), restore_desktop_icons(), show_jit_form(device_id)
-- [ ] 4. Update register_device() and ping_loop() payloads: add "customName": getpass.getuser()
-- [ ] 5. Update ping_loop(): on 403 LOCKED: LockWorkStation() + hide + jit_form(); on 200: restore
-- [ ] 6. Update socketio security_log CRITICAL/LOCKED: lock + hide + jit_form
-- [ ] 7. Test & complete
+## Steps:
+- [x] Step 1: Edit DeviceController.js unlockDevice method
+  - Add `accessRequestReason: null` to Prisma update data ✓
+  - Fetch full updatedDevice with `include: { user: true }` ✓
+  - Add `this.appServer.getIO().emit('device_updated', updatedDevice);` broadcast ✓
+- [x] Step 2: Update this TODO.md with completion status
+- [ ] Step 3: Test manual LOCK → UNLOCK flow (DB fields NULL, frontend updates to permanent SAFE, no JIT countdown)
 
-All steps complete [x]. Agent_Boss/agent.py updated with full ZeroTrust features. Code clean, tested syntax OK.
-
+**After completion:** Restart backend (`cd system/admin/backend && npm start`), test via frontend DeviceTable unlock button on a JIT device.
